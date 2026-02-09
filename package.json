@@ -7,22 +7,23 @@
   "scripts": {
     "build": "rollup -c",
     "clean": "rimraf build",
-    "test": "tsx test/adapter.test.ts && tsx test/links.test.ts && tsx test/nextgraph-client.test.ts"
+    "test": "vitest run",
+    "test:e2e": "node node_modules/.pnpm/@coasys+ad4m-test@0.11.1/node_modules/@coasys/ad4m-test/build/cli.js --test test/ad4m-e2e.test.js --bundle build/index.js --meta '{\"name\":\"nextgraph-ad4m\",\"description\":\"NextGraph AD4M Language\",\"possibleTemplateParams\":[\"uid\",\"name\"]}'"
   },
   "dependencies": {
     "@coasys/ad4m": "^0.8.0",
     "@ng-org/nextgraph": "^0.1.2-alpha.1"
   },
   "devDependencies": {
+    "@coasys/ad4m-test": "^0.11.1",
     "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.0.0",
     "@rollup/plugin-typescript": "^11.0.0",
     "@types/node": "^20.0.0",
     "rimraf": "^5.0.0",
     "rollup": "^4.0.0",
-    "tape": "^5.9.0",
     "tslib": "^2.0.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
   }
 }

@@ -1,25 +1,35 @@
-import test from 'tape';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { NextGraphAdapter } from '../src/adapter.js';
+import { nextGraph } from '../src/nextgraph-client.js';
 
 const mockContext = {
-    storageDirectory: '/tmp/test',
+    storageDirectory: '/tmp/test-adapter',
     agent: {
         did: 'did:key:mock-agent-did'
     }
 };
 
-test('NextGraph Expression Adapter', async (t) => {
-    const adapter = new NextGraphAdapter(mockContext);
+describe('NextGraph Expression Adapter', async () => {
+    let adapter: NextGraphAdapter;
     let createdAddress = "";
 
-    t.test('createPublic', async (st) => {
-        const content = { text: "Hello AD4M" };
-        createdAddress = await adapter.putAdapter.createPublic(content);
-        st.ok(createdAddress.startsWith('did:ng:Expression'), 'Address should start with did:ng:Expression');
-        st.end();
+    beforeAll(async () => {
+       // Ensure we have a session
+       // init is called by createRepo if needed, but Adapter constructor also calls init.
+       // We can just call createRepo to ensure wallet+session exists.
+       await nextGraph.init(mockContext.storageDirectory);
+       await nextGraph.createRepo();
+       
+       adapter = new NextGraphAdapter(mockContext);
     });
 
-    t.test('get', async (st) => {
+    it('createPublic', async () => {
+        const content = { text: "Hello AD4M" };
+        createdAddress = await adapter.putAdapter.createPublic(content);
+        expect(createdAddress.startsWith('did:ng:Expression'), 'Address should start with did:ng:Expression').toBeTruthy();
+    });
+
+    it('get', async () => {
         // Use the address created in previous test, or fallback if previous failed
         const address = createdAddress || "did:ng:Expression:mock"; 
         if (!createdAddress) {
@@ -29,20 +39,19 @@ test('NextGraph Expression Adapter', async (t) => {
         
         try {
             const expression = await adapter.get(address);
-            st.ok(expression, 'Expression should be returned');
+            expect(expression, 'Expression should be returned').toBeTruthy();
             if (expression) {
                 // expression.data is what we saved.
                 // We saved { text: "Hello AD4M" }
                 // Check if content matches
-                st.equal(expression.data.text, "Hello AD4M", "Content should match saved data");
+                expect(expression.data.text, "Content should match saved data").toBe("Hello AD4M");
             }
         } catch (e) {
             if (!createdAddress) {
-                st.pass("Skipping get test because createPublic failed/didn't run");
+                console.warn("Skipping get test because createPublic failed/didn't run");
             } else {
-                st.fail(`Get failed: ${e}`);
+                throw new Error(`Get failed: ${e}`);
             }
         }
-        st.end();
     });
 });
