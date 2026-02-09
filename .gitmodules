@@ -1,0 +1,6 @@
+[submodule "ad4m"]
+	path = ad4m
+	url = https://github.com/coasys/ad4m.git
+[submodule "nextgraph"]
+	path = nextgraph
+	url = https://git.nextgraph.org/NextGraph/nextgraph-rs.git
