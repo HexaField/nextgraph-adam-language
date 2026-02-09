@@ -111,7 +111,7 @@ export class NextGraphClientWrapper {
     return this.initPromise;
   }
 
-  async createRepo(): Promise<string> {
+  async createRepo(params?: { name?: string; uid?: string }): Promise<string> {
     await this.initPromise;
     
     // Check if we already have a session
@@ -199,9 +199,13 @@ export class NextGraphClientWrapper {
         };
         
         const password = "nextgraph-ad4m-secret";
+        
+        const walletLabel = params?.name 
+            ? `NextGraph Wallet - ${params.name}` 
+            : (params?.uid ? `NextGraph Wallet - ${params.uid}` : "NextGraph Test Wallet");
 
         const createWalletParams: CreateWalletV0 = {
-            security_txt: "NextGraph Test Wallet",
+            security_txt: walletLabel,
             security_img: null,
             pin: undefined, // No PIN
             pazzle_length: 0,

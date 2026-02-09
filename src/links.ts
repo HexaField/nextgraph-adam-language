@@ -15,8 +15,13 @@ export class NextGraphLinksAdapter implements LinkSyncAdapter {
         nextGraph.init(context.storageDirectory, context.agent?.did);
     }
 
+    const params = {
+        name: context.templateData?.name,
+        uid: context.templateData?.uid
+    };
+
     // Ensure repo is created/loaded and then subscribe
-    nextGraph.createRepo().then((repoId) => {
+    nextGraph.createRepo(params).then((repoId) => {
         console.log("NextGraph Repo ready:", repoId);
         nextGraph.graphSubscribe(repoId);
     }).catch(e => {
