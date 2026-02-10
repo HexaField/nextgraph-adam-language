@@ -16,6 +16,9 @@ The adapter uses the official NextGraph WASM SDK (`@ng-org/nextgraph`) to manage
 *   **Graph Synchronization**: Implements the `LinkSyncAdapter` interface.
     *   Synchronizes AD4M Links (triples) with the NextGraph Repo Graph.
     *   Supports `additions` and `removals` via batched SPARQL updates.
+*   **Cryptographic Security**: Preserves AD4M `Proof` objects (signatures, keys) within NextGraph metadata, ensuring data authenticity.
+*   **Multi-Agent Support**: Handles identity switching (`setLocalAgents`) allows multiple local agents to interact with the same store.
+*   **Sync State Reporting**: Accurately reports `Synced`, `Offline`, or `Syncing` status to the AD4M host.
 *   **Real-time Updates**:
     *   Subscribes to remote changes on the Repo/Store using `doc_subscribe`.
     *   Propagates change signals to AD4M to trigger live updates in the UI.
@@ -92,6 +95,10 @@ To use this language in your AD4M application:
 
 ## Known Limitations (MVP)
 
+*   **Telepresence / Realtime Messaging**:
+    *   NextGraph does not currently expose ephemeral messaging, presence, or PubSub APIs to the client SDK.
+    *   Telepresence features (online status, typing indicators) are currently stubbed.
+    *   Future versions may integrate a secondary layer (like `libp2p`) to implement these features if native support is not added.
 *   **Password**: Currently uses a hardcoded password for the local wallet file to ensure non-interactive startup. Security relies on the host system's file permissions.
 *   **Diff Granularity**: Real-time subscriptions currently notify AD4M *that* a change occurred, forcing a refresh. Granular diffs (telling AD4M exactly which links changed) are planned for the future once the NextGraph update format is fully mapped.
 *   **Private Store Only**: Currently defaults to the Private Store. Public/Protected store support is stubbed but not fully exposed via AD4M config yet.
