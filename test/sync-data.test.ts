@@ -65,7 +65,7 @@ describe('NextGraph Data Synchronization', () => {
         expect(removed.object).toBe('o2');
     });
 
-    it('Spec 2: Incoming updates from NextGraph should trigger diffObservers', () => {
+    it('Spec 2: Incoming updates from NextGraph should trigger diffObservers', async () => {
         const observer = vi.fn();
         adapter.addCallback(observer);
 
@@ -77,7 +77,7 @@ describe('NextGraph Data Synchronization', () => {
         const additions = [{ subject: 's_in', predicate: 'p_in', object: 'o_in' }];
         const removals = [{ subject: 's_rm', predicate: 'p_rm', object: 'o_rm' }];
         
-        updateCallback('did:ng:repo:test', additions, removals);
+        await updateCallback('did:ng:repo:test', additions, removals);
 
         expect(observer).toHaveBeenCalledTimes(1);
         const emittedDiff = observer.mock.calls[0][0];

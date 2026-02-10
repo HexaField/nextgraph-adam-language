@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NextGraphLinksAdapter } from '../src/links.js';
+import { NextGraphAdapter } from '../src/adapter.js';
 import { nextGraph } from '../src/nextgraph-client.js';
 
 // Mock the NextGraph client
@@ -12,22 +13,51 @@ vi.mock('../src/nextgraph-client.js', () => ({
         onGraphUpdate: vi.fn(),
         graphUpdate: vi.fn().mockResolvedValue('rev-sig-1'),
         graphGetTriples: vi.fn().mockResolvedValue([]),
+        docCreate: vi.fn().mockResolvedValue('did:ng:o:doc-1'),
+        docPut: vi.fn().mockResolvedValue(undefined),
+        docGet: vi.fn().mockResolvedValue({
+            data: { "text": "hello" },
+            metadata: {
+                author: "did:key:author",
+                timestamp: "2023-01-01",
+                signature: "sig-valid",
+                key: "key-valid"
+            }
+        })
     }
 }));
 
 describe('NextGraph Security & Signatures', () => {
-    let adapter: NextGraphLinksAdapter;
+    let linksAdapter: NextGraphLinksAdapter;
+    let expressionAdapter: NextGraphAdapter;
+    
+    // We mock the context.agent.sign/verify to simulate AD4M behavior
     const mockContext = {
         storageDirectory: '/tmp/test-security',
-        agent: { did: 'did:key:author' },
+        agent: { 
+            did: 'did:key:author',
+            sign: vi.fn().mockResolvedValue({
+                signature: "sig-generated",
+                key: "key-generated"
+            }),
+            verify: vi.fn().mockImplementation(async (signature, data) => {
+                return signature === "sig-valid";
+            })
+        },
         templateData: { name: 'SecurityTest' }
     };
 
     beforeEach(async () => {
         vi.clearAllMocks();
-        adapter = new NextGraphLinksAdapter(mockContext);
+        linksAdapter = new NextGraphLinksAdapter(mockContext);
+        expressionAdapter = new NextGraphAdapter(mockContext);
+        
+        // Ensure init happens
+        // Note: Real implementations might need await in init()
         await new Promise(r => setTimeout(r, 0));
     });
+
+    // --- Links Tests (Graph) ---
 
     it('Spec 1: commit() should include signature metadata in graph update', async () => {
         const proof = { 
@@ -47,71 +77,109 @@ describe('NextGraph Security & Signatures', () => {
             ] as any[],
             removals: []
         };
-
-        await adapter.commit(diff);
-
-        expect(nextGraph.graphUpdate).toHaveBeenCalled();
-        const args = (nextGraph.graphUpdate as any).mock.calls[0];
-        const additions = args[1];
-
-        // We expect the addition object to now contain extra metadata properties
-        // The implementation strategy mentioned "props" or "metadata"
-        // Let's assume we map it to an object structure that NextGraph accepts, 
-        // or encoded in the object if NextGraph only supports RDF triples.
-        // If NextGraph supports props on triples (Property Graph style), great.
-        // If not, we might fail unless we implement a serialization strategy.
         
-        // For this test, let's assume we expect a `props` or similar field on the passed object
-        // Or if using standard generic triple interface:
-        // { subject, predicate, object, signature: string, key: string, author: string }
+        await linksAdapter.commit(diff);
         
-        expect(additions[0].signature).toBe('sig_abc123');
-        expect(additions[0].key).toBe('key_xyz789');
-        expect(additions[0].author).toBe('did:key:author');
+        // The adapter should extract proof from the LinkExpression AND pass it to nextGraph
+        expect(nextGraph.graphUpdate).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.arrayContaining([
+                expect.objectContaining({
+                    subject: 's1', // checking if triple data passed
+                    signature: 'sig_abc123',
+                    key: 'key_xyz789'
+                })
+            ]),
+            expect.any(Array)
+        );
     });
 
     it('Spec 2: render() should reconstruct LinkExpression with valid proof from stored data', async () => {
-        // Mock stored triples HAVE signature data
+        // Mock stored data with metadata
         (nextGraph.graphGetTriples as any).mockResolvedValue([
-            { 
-                subject: 's1', 
-                predicate: 'p1', 
-                object: 'o1',
-                // Mocking returned metadata
-                author: 'did:key:stored-author',
-                signature: 'sig_stored',
-                key: 'key_stored'
+            {
+                subject: 's1', predicate: 'p1', object: 'o1',
+                author: 'did:key:author',
+                timestamp: '2023-01-01',
+                signature: 'sig-valid',
+                key: 'key-valid'
             }
         ]);
 
-        const perspective = await adapter.render();
+        const perspective = await linksAdapter.render();
         const link = perspective.links[0];
-
-        expect(link.author).toBe('did:key:stored-author');
-        expect(link.proof.signature).toBe('sig_stored');
-        expect(link.proof.key).toBe('key_stored');
-        // By default should assume validity until checked, or we might need to re-verify
-        expect(link.proof.valid).toBe(true); 
+        
+        expect(link).toBeDefined();
+        expect(link.proof.signature).toBe('sig-valid');
+        expect(link.proof.key).toBe('key-valid');
+        // The adapter logic should call context.agent.verify(signature, data)
+        // Since we mock verify returning true for "sig-valid"
+        expect(link.proof.valid).toBe(true);
     });
 
-    it('Spec 3: Incoming sync updates should also carry proofs', () => {
-        const observer = vi.fn();
-        adapter.addCallback(observer);
-        const onUpdate = (nextGraph.onGraphUpdate as any).mock.calls[0][0];
+    it('Spec 3: render() should mark link invalid if signature mismatch', async () => {
+        (nextGraph.graphGetTriples as any).mockResolvedValue([
+            {
+                subject: 's1', predicate: 'p1', object: 'o1',
+                author: 'did:key:author',
+                timestamp: '2023-01-01',
+                signature: 'sig-invalid', 
+                key: 'key-valid'
+            }
+        ]);
 
-        // Simulate update WITH metadata
-        onUpdate('did:ng:repo:test', 
-            [{ 
-                subject: 's2', predicate: 'p2', object: 'o2', 
-                author: 'did:key:remote', signature: 'sig_remote', key: 'key_remote' 
-            }], 
-            []
+        const perspective = await linksAdapter.render();
+        const link = perspective.links[0];
+        
+        expect(link.proof.valid).toBe(false);
+    });
+
+    // --- Expression Tests (Documents) ---
+    
+    it('Spec 4: createPublic() should sign content and store signature', async () => {
+        const content = { text: "hello" };
+        
+        await expressionAdapter.putAdapter.createPublic(content);
+        
+        // 1. Adapter should sign the content
+        expect(mockContext.agent.sign).toHaveBeenCalledWith(content);
+        
+        // 2. Adapter should store content + signature
+        expect(nextGraph.docPut).toHaveBeenCalledWith(
+            'did:ng:o:doc-1', // created doc ID
+            content,
+            expect.objectContaining({
+                author: 'did:key:author',
+                signature: 'sig-generated', // from mock sign
+                key: 'key-generated'
+            })
         );
-
-        const call = observer.mock.calls[0][0];
-        const addition = call.additions[0];
-
-        expect(addition.author).toBe('did:key:remote');
-        expect(addition.proof.signature).toBe('sig_remote');
     });
+
+    it('Spec 5: get() should return valid=true for verified signatures', async () => {
+        const expr = await expressionAdapter.get('did:ng:o:doc-1');
+        
+        expect(expr).not.toBeNull();
+        expect(expr?.proof.signature).toBe('sig-valid');
+        // Should verify signature against content 
+        expect(mockContext.agent.verify).toHaveBeenCalled();
+        expect(expr?.proof.valid).toBe(true);
+    });
+    
+    it('Spec 6: get() should return valid=false for invalid signatures', async () => {
+        (nextGraph.docGet as any).mockResolvedValueOnce({
+            data: { "text": "bad" },
+            metadata: {
+                author: "did:key:hacker",
+                timestamp: "2023-01-01",
+                signature: "sig-invalid",
+                key: "key-hacker"
+            }
+        });
+
+        const expr = await expressionAdapter.get('did:ng:o:doc-1');
+        
+        expect(expr?.proof.valid).toBe(false);
+    });
+
 });

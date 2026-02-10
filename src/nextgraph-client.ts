@@ -112,17 +112,14 @@ export class NextGraphClientWrapper {
   }
 
   async createRepo(params?: { name?: string; uid?: string }): Promise<string> {
-    await this.initPromise;
-    
-    // Check if we already have a session
-    if (this.session) {
-        return this.repoId;
-    }
-    
     // Check if we have a wallet file to load instead of creating new
-    if (fs.existsSync(this.walletPath) && fs.existsSync(this.walletPath + ".name")) {
+    const walletExists = fs.existsSync(this.walletPath);
+    const metaExists = fs.existsSync(this.walletPath + ".name");
+    
+    if (walletExists && metaExists) {
+         let recoveryNeeded = false;
          try {
-             console.log("Loading existing wallet...");
+             // console.log("Loading existing wallet...");
              const walletData = fs.readFileSync(this.walletPath);
              const walletBytes = new Uint8Array(walletData);
              const walletName = fs.readFileSync(this.walletPath + ".name", "utf-8");
@@ -131,17 +128,21 @@ export class NextGraphClientWrapper {
              try {
                 walletObj = await ng.wallet_read_file(walletBytes);
              } catch (e) {
-                 console.error("wallet_read_file failed:", e);
+                 // console.error("wallet_read_file failed:", e);
                  throw e;
              }
              
-             // Try opening with fixed password
-             const password = "nextgraph-ad4m-secret";
+             // Try opening with password
+             if (!fs.existsSync(this.walletPath + ".secret")) {
+                 throw new Error("Wallet secret file missing. Cannot decrypt wallet.");
+             }
+             const password = fs.readFileSync(this.walletPath + ".secret", "utf-8");
+             
              let openedWallet;
              try {
                 openedWallet = await ng.wallet_open_with_password(walletObj, password);
              } catch (e) {
-                 console.error("wallet_open_with_password failed:", e);
+                 // console.error("wallet_open_with_password failed:", e);
                  throw e;
              }
              
@@ -151,7 +152,7 @@ export class NextGraphClientWrapper {
                 client = await ng.wallet_import(walletObj, openedWallet, true);
                 console.log("wallet_import success");
              } catch (e) {
-                 console.error("wallet_import failed:", e);
+                 // console.error("wallet_import failed:", e);
                  throw e;
              }
 
@@ -171,11 +172,26 @@ export class NextGraphClientWrapper {
                  this._repoId = `did:ng:repo:${repoId}`;
                  return this._repoId;
              } catch (e) {
-                 console.error("session_start failed:", e);
+                 // console.error("session_start failed:", e);
                  throw e;
              }
          } catch (e) {
-             console.warn("Failed to load existing wallet. Will create a new one.", e);
+             console.warn("Recovering from wallet error:", e);
+             recoveryNeeded = true;
+         }
+
+         if (recoveryNeeded) {
+             // Backup corrupted files
+             const timestamp = Date.now();
+             const backupPath = this.walletPath + ".bak-" + timestamp + ".ng";
+             try {
+                console.log(`Backing up corrupted wallet to ${backupPath}`);
+                if (fs.existsSync(this.walletPath)) fs.renameSync(this.walletPath, backupPath);
+                if (fs.existsSync(this.walletPath + ".name")) fs.renameSync(this.walletPath + ".name", backupPath + ".name");
+                if (fs.existsSync(this.walletPath + ".secret")) fs.renameSync(this.walletPath + ".secret", backupPath + ".secret");
+             } catch (renameError) {
+                 console.error("Failed to backup corrupted wallet, overwriting risky:", renameError);
+             }
              // Fall through to creation logic
          }
     }
@@ -198,7 +214,10 @@ export class NextGraphClientWrapper {
             }]
         };
         
-        const password = "nextgraph-ad4m-secret";
+        // Use a secure random password for new wallets
+        const passBytes = new Uint8Array(32);
+        crypto.getRandomValues(passBytes);
+        const password = Buffer.from(passBytes).toString('hex');
         
         const walletLabel = params?.name 
             ? `NextGraph Wallet - ${params.name}` 
@@ -229,10 +248,11 @@ export class NextGraphClientWrapper {
             this.userId = result.user;
             this.walletName = result.wallet_name;
 
-            // Save wallet file and name
+            // Save wallet file, name, and secret
             if (result.wallet_file && this.walletPath) {
                 fs.writeFileSync(this.walletPath, Buffer.from(result.wallet_file));
                 fs.writeFileSync(this.walletPath + ".name", result.wallet_name);
+                fs.writeFileSync(this.walletPath + ".secret", password, "utf-8");
                 console.log("Wallet saved to", this.walletPath);
             }
 
@@ -270,7 +290,7 @@ export class NextGraphClientWrapper {
       const finalDest = destination || "store";
 
       try {
-          console.log("docCreate calling WASM with:", { sess, finalCrdt, finalClass, finalDest, storeType, storeRepo });
+          // console.log("docCreate calling WASM with:", { sess, finalCrdt, finalClass, finalDest, storeType, storeRepo });
           const nuri = await ng.doc_create(
               sess,
               finalCrdt,
@@ -279,7 +299,7 @@ export class NextGraphClientWrapper {
               storeType, 
               storeRepo
           );
-          console.log("docCreate result:", nuri);
+          // console.log("docCreate result:", nuri);
           return nuri;
       } catch (e: any) {
           console.error("docCreate failed:", e);
@@ -346,8 +366,10 @@ export class NextGraphClientWrapper {
       if (!this.session) throw new Error("No active session");
 
       const jsonStr = JSON.stringify(data);
-      // Basic escaping for SPARQL string literal. 
-      const escapedJson = jsonStr.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      // Robust escaping for SPARQL string literal
+      const escapedJson = jsonStr
+        .replace(/\\/g, '\\\\') 
+        .replace(/"/g, '\\"');
       
       let extraMetadata = "";
       if (metadata) {
@@ -421,9 +443,9 @@ export class NextGraphClientWrapper {
               targetNuri = "did:ng:" + repoId.substring("did:ng:repo:".length);
           }
           
-          console.log(`Attempting doc_subscribe on ${targetNuri}`);
+          // console.log(`Attempting doc_subscribe on ${targetNuri}`);
           await ng.doc_subscribe(targetNuri, this.session, callback);
-          console.log("doc_subscribe subscribed successfully");
+          // console.log("doc_subscribe subscribed successfully");
       } catch (e) {
           console.warn("doc_subscribe failed:", e);
           
@@ -519,19 +541,20 @@ export class NextGraphClientWrapper {
           await ng.sparql_update(this.session, insertData, targetRepo);
       }
       
-      this.notifyGraphSubscribers(repoId, additions, removals);
+      const newRev = "new-revision-" + Date.now();
+      this.notifyGraphSubscribers(repoId, additions, removals, newRev);
       
-      return "new-revision-" + Date.now();
+      return newRev;
   }
 
-  private graphSubscribers: ((repoId: string, additions: any[], removals: any[]) => void)[] = [];
+  private graphSubscribers: ((repoId: string, additions: any[], removals: any[], revision?: string) => void)[] = [];
 
-  onGraphUpdate(callback: (repoId: string, additions: any[], removals: any[]) => void) {
+  onGraphUpdate(callback: (repoId: string, additions: any[], removals: any[], revision?: string) => void) {
       this.graphSubscribers.push(callback);
   }
 
-  private notifyGraphSubscribers(repoId: string, additions: any[], removals: any[]) {
-      this.graphSubscribers.forEach(cb => cb(repoId, additions, removals));
+  private notifyGraphSubscribers(repoId: string, additions: any[], removals: any[], revision?: string) {
+      this.graphSubscribers.forEach(cb => cb(repoId, additions, removals, revision));
   }
 }
 
