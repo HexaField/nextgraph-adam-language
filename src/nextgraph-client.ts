@@ -373,11 +373,12 @@ export class NextGraphClientWrapper {
           // Ideally AD4M would re-query if it gets empty arrays? 
           // Actually AD4M expects the diff.
           
-          // If we can't parse the diff yet, we might need to fetch the graph again and diff locally?
-          // That's expensive.
-          
-          // Let's just log it for now and pass empty arrays, which is safe but incomplete.
-          this.notifyGraphSubscribers(repoId, [], []); 
+          if (update && (update.additions || update.removals)) {
+               this.notifyGraphSubscribers(repoId, update.additions || [], update.removals || []);
+          } else {
+               // Fallback if structure is unknown or empty
+               this.notifyGraphSubscribers(repoId, [], []); 
+          }
       };
 
       try {
