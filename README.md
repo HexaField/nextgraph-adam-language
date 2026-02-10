@@ -61,6 +61,11 @@ npx ts-node test/nextgraph-client.test.ts
 ```
 *Note: The tests create a temporary wallet in `/tmp/test-storage`.*
 
+### 4. End-to-End Tests
+Runs full AD4M Link Language tests using `@coasys/ad4m-test`.
+*   **Single Agent**: `npm run test:e2e`
+*   **Multi-Agent (Sync)**: `npm run test:e2e:multi`
+
 ## Configuration
 
 The adapter automatically initializes storage in the directory provided by the AD4M Host context (`context.storageDirectory`).

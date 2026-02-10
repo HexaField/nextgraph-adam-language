@@ -8,7 +8,8 @@
     "build": "rollup -c",
     "clean": "rimraf build",
     "test": "vitest run",
-    "test:e2e": "node node_modules/.pnpm/@coasys+ad4m-test@0.11.1/node_modules/@coasys/ad4m-test/build/cli.js --test test/ad4m-e2e.test.js --bundle build/index.js --meta '{\"name\":\"nextgraph-ad4m\",\"description\":\"NextGraph AD4M Language\",\"possibleTemplateParams\":[\"uid\",\"name\"]}'"
+    "test:e2e": "node node_modules/.pnpm/@coasys+ad4m-test@0.11.1/node_modules/@coasys/ad4m-test/build/cli.js --test test/ad4m-e2e.test.js --bundle build/index.js --meta '{\"name\":\"nextgraph-ad4m\",\"description\":\"NextGraph AD4M Language\",\"possibleTemplateParams\":[\"uid\",\"name\"]}'",
+    "test:e2e:multi": "node node_modules/.pnpm/@coasys+ad4m-test@0.11.1/node_modules/@coasys/ad4m-test/build/cli.js --test test/multi-agent.e2e.js --bundle build/index.js --meta '{\"name\":\"nextgraph-ad4m\",\"description\":\"NextGraph AD4M Language\",\"possibleTemplateParams\":[\"uid\",\"name\"]}'"
   },
   "dependencies": {
     "@coasys/ad4m": "^0.8.0",

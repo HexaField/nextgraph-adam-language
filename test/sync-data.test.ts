@@ -50,10 +50,19 @@ describe('NextGraph Data Synchronization', () => {
         expect(args[0]).toBe('did:ng:repo:test');
         
         // Arg 1: Additions (mapped to SG/Triple structure)
-        expect(args[1]).toEqual([{ subject: 's1', predicate: 'p1', object: 'o1' }]);
-        
-        // Arg 2: Removals
-        expect(args[2]).toEqual([{ subject: 's2', predicate: 'p2', object: 'o2' }]);
+        // With security update, this object now has author, timestamp, signature, key.
+        const added = args[1][0];
+        expect(added.subject).toBe('s1');
+        expect(added.predicate).toBe('p1');
+        expect(added.object).toBe('o1');
+        expect(added.author).toBe('me');
+
+        // Arg 2: Removals (Only subject/predicate/object needed for removal in RDF usually, 
+        // but our implementation might pass more. We check minimal correctness)
+        const removed = args[2][0];
+        expect(removed.subject).toBe('s2');
+        expect(removed.predicate).toBe('p2');
+        expect(removed.object).toBe('o2');
     });
 
     it('Spec 2: Incoming updates from NextGraph should trigger diffObservers', () => {

@@ -1,7 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { nextGraph } from '../src/nextgraph-client.ts';
+import * as fs from 'fs';
 
 describe('NextGraph Client Wrapper Tests', () => {
+    beforeAll(() => {
+        // Reset singleton state
+        (nextGraph as any).session = undefined;
+        (nextGraph as any).userId = undefined;
+        (nextGraph as any).walletName = undefined;
+        (nextGraph as any)._repoId = undefined;
+        (nextGraph as any).initPromise = null;
+        (nextGraph as any).initialized = false;
+
+        if (fs.existsSync('/tmp/test-client')) {
+            fs.rmSync('/tmp/test-client', { recursive: true, force: true });
+        }
+    });
+
     it('Initialization', async () => {
         try {
             await nextGraph.init('/tmp/test-client');

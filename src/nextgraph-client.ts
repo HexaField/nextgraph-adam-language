@@ -292,13 +292,21 @@ export class NextGraphClientWrapper {
       if (!this.session) throw new Error("No active session");
       
       // We store content as a predicate on the NURI in the private store
-      const query = `SELECT ?content WHERE { <${nuri}> <http://schema.org/text> ?content }`;
+      // Also fetch metadata
+      const query = `
+        SELECT ?content ?author ?timestamp WHERE {
+            <${nuri}> <http://schema.org/text> ?content .
+            OPTIONAL { <${nuri}> <http://nextgraph.org/core/author> ?author } .
+            OPTIONAL { <${nuri}> <http://nextgraph.org/core/timestamp> ?timestamp } .
+        }`;
       
       try {
           // Pass undefined as 3rd arg to target private store default
           const result = await ng.sparql_query(this.session, query, null, undefined);
           
           let content = {};
+          let metadata: any = {};
+
           if (result && result.results && result.results.bindings && result.results.bindings.length > 0) {
               const binding = result.results.bindings[0];
               if (binding.content && binding.content.value) {
@@ -309,20 +317,23 @@ export class NextGraphClientWrapper {
                       content = binding.content.value;
                   }
               }
+              
+              if (binding.author) metadata.author = binding.author.value;
+              if (binding.timestamp) metadata.timestamp = binding.timestamp.value;
           }
 
-          // Fetch header for metadata
-          let header = {};
+          // Fetch header for metadata (still useful for other system props)
           try {
-              header = await ng.fetch_header(this.session, nuri);
+              const header = await ng.fetch_header(this.session, nuri);
+              metadata = { ...metadata, ...header };
           } catch (e) {
               // ignore header fetch error
           }
 
           return {
               data: content,
-              crdt: "discrete", // Placeholder
-              metadata: header
+              crdt: "YMap", // inferred default or stored
+              metadata: metadata
           };
       } catch (e) {
           console.warn("docGet failed", e);
@@ -336,15 +347,35 @@ export class NextGraphClientWrapper {
 
       const jsonStr = JSON.stringify(data);
       // Basic escaping for SPARQL string literal. 
-      // TODO: Use a proper library for SPARQL escaping if needed.
       const escapedJson = jsonStr.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
       
+      let extraMetadata = "";
+      if (metadata) {
+          if (metadata.author) {
+              extraMetadata += `<${nuri}> <http://nextgraph.org/core/author> "${metadata.author}" . `;
+          }
+          if (metadata.timestamp) {
+              extraMetadata += `<${nuri}> <http://nextgraph.org/core/timestamp> "${metadata.timestamp}" . `;
+          }
+      }
+
       // We replace the content. 
       // DELETE existing and INSERT new.
       const updateQuery = `
-          DELETE { <${nuri}> <http://schema.org/text> ?o }
-          WHERE { <${nuri}> <http://schema.org/text> ?o };
-          INSERT DATA { <${nuri}> <http://schema.org/text> "${escapedJson}" }
+          DELETE { 
+              <${nuri}> <http://schema.org/text> ?o .
+              <${nuri}> <http://nextgraph.org/core/author> ?a .
+              <${nuri}> <http://nextgraph.org/core/timestamp> ?t .
+          }
+          WHERE { 
+              <${nuri}> <http://schema.org/text> ?o .
+              OPTIONAL { <${nuri}> <http://nextgraph.org/core/author> ?a } .
+              OPTIONAL { <${nuri}> <http://nextgraph.org/core/timestamp> ?t } .
+          };
+          INSERT DATA { 
+              <${nuri}> <http://schema.org/text> "${escapedJson}" .
+              ${extraMetadata}
+          }
       `;
       
       // Target default private store
@@ -407,35 +438,85 @@ export class NextGraphClientWrapper {
       await this.initPromise;
       if (!this.session) throw new Error("No active session");
 
-      const query = "SELECT ?s ?p ?o WHERE { ?s ?p ?o }";
-      const result = await ng.sparql_query(this.session, query, null, repoId);
-      return result || [];
+      let targetRepo = repoId;
+      if (targetRepo.startsWith("did:ng:repo:")) {
+          targetRepo = targetRepo.replace("did:ng:repo:", "did:ng:");
+      }
+
+      // Query triples along with their metadata (stored as RDF-star quoted triples)
+      const query = `
+        SELECT ?s ?p ?o ?author ?timestamp ?signature ?key WHERE {
+            ?s ?p ?o .
+            OPTIONAL { << ?s ?p ?o >> <http://nextgraph.org/core/author> ?author } .
+            OPTIONAL { << ?s ?p ?o >> <http://nextgraph.org/core/timestamp> ?timestamp } .
+            OPTIONAL { << ?s ?p ?o >> <http://nextgraph.org/core/signature> ?signature } .
+            OPTIONAL { << ?s ?p ?o >> <http://nextgraph.org/core/key> ?key } .
+        }`;
+      
+      const result = await ng.sparql_query(this.session, query, null, targetRepo);
+      
+      if (result && result.results && Array.isArray(result.results.bindings)) {
+          return result.results.bindings.map((b: any) => ({
+              subject: b.s.value,
+              predicate: b.p.value,
+              object: b.o.value,
+              author: b.author ? b.author.value : undefined,
+              timestamp: b.timestamp ? b.timestamp.value : undefined,
+              signature: b.signature ? b.signature.value : undefined,
+              key: b.key ? b.key.value : undefined
+          }));
+      }
+      return [];
   }
 
   async graphUpdate(repoId: string, additions: any[], removals: any[]): Promise<string> {
       await this.initPromise;
       if (!this.session) throw new Error("No active session");
 
-      let updateString = "";
-      
+      // Convert AD4M Repo ID (did:ng:repo:...) to NextGraph NURI (did:ng:...)
+      let targetRepo = repoId;
+      if (targetRepo.startsWith("did:ng:repo:")) {
+          targetRepo = targetRepo.replace("did:ng:repo:", "did:ng:");
+      }
+
+      // 1. Removals
       if (removals.length > 0) {
-          updateString += "DELETE DATA { ";
-          removals.forEach(t => {
-              updateString += `<${t.subject}> <${t.predicate}> <${t.object}> . `;
-          });
-          updateString += "} ";
+          // Use VALUES to delete basic triples and any attached metadata (RDF-star)
+          const values = removals.map(t => `(<${t.subject}> <${t.predicate}> <${t.object}>)`).join(" ");
+          const deleteQuery = `
+              DELETE { 
+                  ?s ?p ?o . 
+                  << ?s ?p ?o >> ?mp ?mv .
+              }
+              WHERE {
+                  VALUES (?s ?p ?o) { ${values} }
+                  ?s ?p ?o .
+                  OPTIONAL { << ?s ?p ?o >> ?mp ?mv }
+              }
+          `;
+          await ng.sparql_update(this.session, deleteQuery, targetRepo);
       }
       
+      // 2. Additions
       if (additions.length > 0) {
-          updateString += "INSERT DATA { ";
+          let insertData = "INSERT DATA { ";
           additions.forEach(t => {
-              updateString += `<${t.subject}> <${t.predicate}> <${t.object}> . `;
+              insertData += `<${t.subject}> <${t.predicate}> <${t.object}> . `;
+              if (t.author) {
+                  insertData += `<< <${t.subject}> <${t.predicate}> <${t.object}> >> <http://nextgraph.org/core/author> "${t.author}" . `;
+              }
+              if (t.timestamp) {
+                  insertData += `<< <${t.subject}> <${t.predicate}> <${t.object}> >> <http://nextgraph.org/core/timestamp> "${t.timestamp}" . `;
+              }
+              if (t.signature) {
+                  insertData += `<< <${t.subject}> <${t.predicate}> <${t.object}> >> <http://nextgraph.org/core/signature> "${t.signature}" . `;
+              }
+              if (t.key) {
+                  insertData += `<< <${t.subject}> <${t.predicate}> <${t.object}> >> <http://nextgraph.org/core/key> "${t.key}" . `;
+              }
           });
-          updateString += "} ";
-      }
-      
-      if (updateString) {
-          await ng.sparql_update(this.session, updateString, repoId);
+          insertData += " }";
+          await ng.sparql_update(this.session, insertData, targetRepo);
       }
       
       this.notifyGraphSubscribers(repoId, additions, removals);

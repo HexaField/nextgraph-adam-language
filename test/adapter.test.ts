@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { NextGraphAdapter } from '../src/adapter.js';
 import { nextGraph } from '../src/nextgraph-client.js';
+import * as fs from 'fs';
 
 const mockContext = {
     storageDirectory: '/tmp/test-adapter',
@@ -14,6 +15,20 @@ describe('NextGraph Expression Adapter', async () => {
     let createdAddress = "";
 
     beforeAll(async () => {
+       // Reset singleton state
+       (nextGraph as any).session = undefined;
+       (nextGraph as any).userId = undefined;
+       (nextGraph as any).walletName = undefined;
+       (nextGraph as any)._repoId = undefined;
+       // (nextGraph as any).initCalled = false; // initCalled is not on the class, only initialized is
+       (nextGraph as any).initPromise = null;
+       (nextGraph as any).initialized = false;
+
+       // Clean up previous runs
+       if (fs.existsSync(mockContext.storageDirectory)) {
+           fs.rmSync(mockContext.storageDirectory, { recursive: true, force: true });
+       }
+       
        // Ensure we have a session
        // init is called by createRepo if needed, but Adapter constructor also calls init.
        // We can just call createRepo to ensure wallet+session exists.
@@ -26,7 +41,7 @@ describe('NextGraph Expression Adapter', async () => {
     it('createPublic', async () => {
         const content = { text: "Hello AD4M" };
         createdAddress = await adapter.putAdapter.createPublic(content);
-        expect(createdAddress.startsWith('did:ng:Expression'), 'Address should start with did:ng:Expression').toBeTruthy();
+        expect(createdAddress.startsWith('did:ng:o'), 'Address should start with did:ng:o').toBeTruthy();
     });
 
     it('get', async () => {

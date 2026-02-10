@@ -27,9 +27,11 @@ export class NextGraphAdapter implements ExpressionAdapter {
 
   putAdapter: PublicSharing = {
     createPublic: async (content: object): Promise<Address> => {
-      // Create a discrete document
+      // Create a document
       // Use undefined sessionId to use the active session
-      const nuri = await nextGraph.docCreate(undefined, "discrete", "Expression", "local", "store", "repo");
+      // Use "store" destination and "private" storeType
+      // Use "YMap" and "DOM" as confirmed working combination
+      const nuri = await nextGraph.docCreate(undefined, "YMap", "DOM", "store", "private", undefined);
       
       const author = this.context.agent.did;
       const timestamp = new Date().toISOString();
