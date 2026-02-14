@@ -280,6 +280,44 @@ async function pollGraphQLReady(port, maxAttempts = 60) {
 
   fs.writeFileSync(filePath, content);
   console.log(`  Added GraphQL polling to: ${filePath}`);
+
+  // Also hook stderr for "AD4M init complete" — Rust executor uses log::info! which goes to stderr
+  addStderrInitDetection(filePath);
+}
+
+function addStderrInitDetection(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  let content = fs.readFileSync(filePath, 'utf8');
+  
+  // Find all "AD4M init complete" handlers on stdout and duplicate them to stderr
+  // The pattern: child.stdout.on('data', async (data) => { ... if (data.toString().includes('AD4M init complete')) { ... } })
+  // We need to add: child.stderr.on('data', ...) with the same "AD4M init complete" check
+  
+  // Simple approach: after the log-writing stderr handler, add a new stderr handler for init detection
+  const stderrInitHandler = `
+    // Patched: v0.11.1 Rust executor logs "AD4M init complete" to stderr (log::info!)
+    child.stderr.on('data', async (data) => {
+      if (data.toString().includes('AD4M init complete')) {
+        console.log('[INFO] AD4M init complete detected on stderr');
+        // Trigger the same handler as stdout would
+        child.stdout.emit('data', Buffer.from('AD4M init complete'));
+      }
+    });
+`;
+  
+  // Insert after the second child.stderr.on('data' handler (the log writer)
+  // or after the spawn poll injection
+  if (content.includes('// Patched: poll for GraphQL readiness')) {
+    // Insert after the polling IIFE
+    const marker = '})();';
+    const idx = content.indexOf(marker, content.indexOf('// Patched: poll for GraphQL readiness'));
+    if (idx !== -1) {
+      content = content.slice(0, idx + marker.length) + '\n' + stderrInitHandler + content.slice(idx + marker.length);
+    }
+  }
+  
+  fs.writeFileSync(filePath, content);
+  console.log(`  Added stderr "AD4M init complete" detection to: ${filePath}`);
 }
 
 // Main
