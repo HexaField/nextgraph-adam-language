@@ -96,6 +96,12 @@ jobs:
           chmod +x ~/.ad4m-test/binary/ad4m
           echo "Binary: $(~/.ad4m-test/binary/ad4m --version 2>&1 || true) ($(stat --format='%s' ~/.ad4m-test/binary/ad4m) bytes)"
 
+      # Run installSystemLanguages to populate bootstrapSeed.json with system language hashes
+      # This is a prerequisite for the test harness
+      - name: Install AD4M system languages
+        run: node node_modules/@coasys/ad4m-test/build/installSystemLanguages.js
+        timeout-minutes: 5
+
       - name: Build language bundle
         run: pnpm run build
 
