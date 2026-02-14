@@ -14,5 +14,5 @@ export default {
     commonjs(),
     typescript({ tsconfig: './tsconfig.json' }),
   ],
-  external: ['@coasys/ad4m', '@ng-org/nextgraph'], // Don't bundle ad4m core or nextgraph
+  external: [], // Deno executor has no node_modules — everything must be bundled
 };
