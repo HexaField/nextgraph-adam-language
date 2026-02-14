@@ -59,8 +59,13 @@ function createBootstrapSeed(dir) {
   
   const langBundlePath = path.join(dir, 'build', 'languages', 'languages', 'build', 'bundle.js');
   if (fs.existsSync(langBundlePath)) {
-    seed.languageLanguageBundle = fs.readFileSync(langBundlePath, 'utf-8');
-    console.log(`  Loaded Language Language bundle (${seed.languageLanguageBundle.length} chars)`);
+    let cjsBundle = fs.readFileSync(langBundlePath, 'utf-8');
+    // Convert CJS bundle to ESM — Deno runtime loads via file:// URL and expects ESM
+    const esmBundle = convertCjsToEsm(cjsBundle);
+    seed.languageLanguageBundle = esmBundle;
+    // Also overwrite the file itself so it's ESM when loaded from disk
+    fs.writeFileSync(langBundlePath, esmBundle);
+    console.log(`  Converted Language Language bundle to ESM (${esmBundle.length} chars)`);
   }
   
   const publishedLangs = path.resolve(dir, 'build', 'publishedLanguages');
@@ -72,6 +77,38 @@ function createBootstrapSeed(dir) {
   
   fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2));
   console.log(`  Created: ${seedPath}`);
+}
+
+function convertCjsToEsm(code) {
+  // Replace CJS patterns with ESM equivalents
+  let esm = code;
+  
+  // Remove 'use strict' (ESM is strict by default)
+  esm = esm.replace(/^'use strict';\s*/m, '');
+  
+  // Remove Object.defineProperty(exports, '__esModule', ...)
+  esm = esm.replace(/Object\.defineProperty\(exports,\s*'__esModule'.*?\);\s*/g, '');
+  
+  // Replace require() calls with imports (collect them first)
+  // var path = require('path'); → import path from 'path';
+  // var fs = require('fs'); → import fs from 'fs';
+  const requires = [];
+  esm = esm.replace(/var\s+(\w+)\s*=\s*require\('([^']+)'\);?/g, (match, varName, modName) => {
+    requires.push({ varName, modName });
+    return ''; // Remove, we'll add imports at top
+  });
+  
+  // Replace exports["default"] = ... and exports.name = ... at the end
+  esm = esm.replace(/exports\["default"\]\s*=\s*(\w+);/g, '');
+  esm = esm.replace(/exports\.(\w+)\s*=\s*(\w+);/g, '');
+  
+  // Remove sourceMappingURL
+  esm = esm.replace(/\/\/# sourceMappingURL=.*$/m, '');
+  
+  // Build the ESM output
+  const imports = requires.map(r => `import ${r.varName} from '${r.modName}';`).join('\n');
+  
+  return `${imports}\n${esm}\nexport default create;\nexport { name };\n`;
 }
 
 function compileTsc(dir) {
