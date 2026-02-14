@@ -23,9 +23,10 @@ describe("NextGraph Expression Language", () => {
     
     console.log("Retrieved Expression:", expression);
 
-    // Verify content
-    if (expression.data.text !== "Hello E2E") {
-        throw new Error(`Content mismatch. Expected 'Hello E2E', got '${expression.data.text}'`);
+    // Verify content — data may be a JSON string or parsed object
+    const data = typeof expression.data === 'string' ? JSON.parse(expression.data) : expression.data;
+    if (data.text !== "Hello E2E") {
+        throw new Error(`Content mismatch. Expected 'Hello E2E', got '${data.text}'`);
     }
   });
 });
