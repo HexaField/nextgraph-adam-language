@@ -20,6 +20,7 @@
     "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.0.0",
     "@rollup/plugin-typescript": "^11.0.0",
+    "@rollup/plugin-wasm": "^6.2.2",
     "@types/node": "^20.0.0",
     "chai": "^6.2.2",
     "rimraf": "^5.0.0",
