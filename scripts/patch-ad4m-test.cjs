@@ -291,6 +291,22 @@ for (const dir of dirs) {
         patchFile(path.join(buildDir, file), [...cliPatches, ...contextAwarePatches]);
       }
     }
+    
+    // Step 5: Patch utils.js — handle GitHub API rate limits / failures
+    const utilsPath = path.join(buildDir, 'utils.js');
+    if (fs.existsSync(utilsPath)) {
+      let utils = fs.readFileSync(utilsPath, 'utf-8');
+      // The version check crashes when GitHub API returns rate-limit error
+      // Replace with safe version extraction
+      if (utils.includes("data['name'].replace('v', '')")) {
+        utils = utils.replace(
+          "const version = data['name'].replace('v', '');",
+          "const version = (data && data['name']) ? data['name'].replace('v', '') : '0.10.1';"
+        );
+        fs.writeFileSync(utilsPath, utils);
+        console.log('  Patched utils.js: safe GitHub API version check');
+      }
+    }
   }
 }
 
