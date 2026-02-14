@@ -96,6 +96,17 @@ const cliPatches = [
   [", '--ipfsPort', ipfsPort.toString()", ''],
   // Remove --overrideConfig
   [' --overrideConfig', ''],
+  // Fix stdout detection: v0.10.1 logs to stderr via Rust log crate, not stdout
+  // Re-emit stderr data as stdout so all detection logic works
+  [
+    "child.stderr.on('data', async (data) => {\n            logFile.write(data);\n        });",
+    "child.stderr.on('data', async (data) => {\n            logFile.write(data);\n            child.stdout.emit('data', data);\n        });"
+  ],
+  // Also detect "listening on" as alternative to "GraphQL server started"
+  [
+    "data.toString().includes('GraphQL server started, Unlock the agent to start holohchain')",
+    "(data.toString().includes('GraphQL server started, Unlock the agent to start holohchain') || data.toString().includes('listening on http://127.0.0.1'))"
+  ],
   // Guard storagePath copy for empty paths
   [
     "fs.copySync(tempSeedFile.languageLanguageSettings.storagePath",
