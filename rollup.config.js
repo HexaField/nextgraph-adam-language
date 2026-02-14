@@ -60,6 +60,21 @@ export default {
         return null;
       },
     },
+    // Transform dynamic require(String.raw`...`) to static require('...')
+    // Rollup's commonjs plugin can't analyze template literal requires
+    {
+      name: 'fix-dynamic-requires',
+      transform(code, id) {
+        if (id.includes('lib_wasm.js') || id.includes('lib_wasm.cjs')) {
+          code = code.replace(
+            /require\(String\.raw`([^`]+)`\)/g,
+            (_, path) => `require('${path}')`
+          );
+          return { code, map: null };
+        }
+        return null;
+      },
+    },
     resolve({
       preferBuiltins: false,
     }),
