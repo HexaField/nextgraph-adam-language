@@ -6,7 +6,7 @@ export default {
   input: 'src/index.ts',
   output: {
     file: 'build/index.js',
-    format: 'cjs', // AD4M languages are typically loaded as CommonJS or IIFE, let's verify. Usually CJS for Node environment languages.
+    format: 'es', // AD4M executor uses Deno runtime which requires ESM
     sourcemap: true,
   },
   plugins: [

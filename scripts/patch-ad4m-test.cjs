@@ -61,15 +61,23 @@ function createBootstrapSeed(dir) {
     neighbourhoodLanguageSettings: { storagePath: "" }
   };
   
-  const langBundlePath = path.join(dir, 'build', 'languages', 'languages', 'build', 'bundle.js');
-  if (fs.existsSync(langBundlePath)) {
-    let cjsBundle = fs.readFileSync(langBundlePath, 'utf-8');
-    // Convert CJS bundle to ESM — Deno runtime loads via file:// URL and expects ESM
-    const esmBundle = convertCjsToEsm(cjsBundle);
-    seed.languageLanguageBundle = esmBundle;
-    // Also overwrite the file itself so it's ESM when loaded from disk
-    fs.writeFileSync(langBundlePath, esmBundle);
-    console.log(`  Converted Language Language bundle to ESM (${esmBundle.length} chars)`);
+  // Convert ALL system language bundles from CJS to ESM — Deno runtime requires ESM
+  const langsDir = path.join(dir, 'build', 'languages');
+  if (fs.existsSync(langsDir)) {
+    for (const langName of fs.readdirSync(langsDir)) {
+      const bundlePath = path.join(langsDir, langName, 'build', 'bundle.js');
+      if (fs.existsSync(bundlePath)) {
+        const cjsBundle = fs.readFileSync(bundlePath, 'utf-8');
+        if (cjsBundle.includes("require('") || cjsBundle.includes('exports')) {
+          const esmBundle = convertCjsToEsm(cjsBundle);
+          fs.writeFileSync(bundlePath, esmBundle);
+          console.log(`  Converted ${langName} bundle to ESM (${esmBundle.length} chars)`);
+          if (langName === 'languages') {
+            seed.languageLanguageBundle = esmBundle;
+          }
+        }
+      }
+    }
   }
   
   const publishedLangs = path.resolve(dir, 'build', 'publishedLanguages');
@@ -110,17 +118,32 @@ function convertCjsToEsm(code) {
     return '';
   });
   
-  // Replace exports["default"] = ... and exports.name = ... at the end
-  esm = esm.replace(/exports\["default"\]\s*=\s*(\w+);/g, '');
-  esm = esm.replace(/exports\.(\w+)\s*=\s*(\w+);/g, '');
+  // Collect named exports before removing them
+  const namedExports = new Set();
+  let hasDefault = false;
+  
+  // Match exports["default"] = X or exports.default = X
+  esm = esm.replace(/exports\["default"\]\s*=\s*(\w+);/g, (m, name) => {
+    hasDefault = true;
+    namedExports.add(`default:${name}`);
+    return '';
+  });
+  esm = esm.replace(/exports\.default\s*=\s*(\w+);/g, (m, name) => {
+    hasDefault = true;
+    namedExports.add(`default:${name}`);
+    return '';
+  });
+  
+  // Match exports.X = Y
+  esm = esm.replace(/exports\.(\w+)\s*=\s*(\w+);/g, (m, exportName, localName) => {
+    namedExports.add(`named:${exportName}:${localName}`);
+    return '';
+  });
   
   // Remove sourceMappingURL
   esm = esm.replace(/\/\/# sourceMappingURL=.*$/m, '');
   
-  // Patch out IPFS usage — executor removed IPFS support but Language Language
-  // bundle still calls context.IPFS.add() for hashing. Replace with direct use
-  // of language.meta.address (already computed by executor via UTILS.hash()).
-  // Use simple string replacements instead of complex regex
+  // Patch out IPFS usage in Language Language bundle
   const ipfsLines = [
     'const ipfsAddress = await __classPrivateFieldGet$1(this, _PutAdapter_IPFS, "f").add({ content: language.bundle.toString() }, { onlyHash: true });',
     '// @ts-ignore',
@@ -130,7 +153,6 @@ function convertCjsToEsm(code) {
   for (const line of ipfsLines) {
     esm = esm.split(line).join('');
   }
-  // Replace the throw with just: const hash = language.meta.address;
   esm = esm.replace(
     /throw new Error\(`Language Persistence: Can't store language[^`]*`\);/,
     'const hash = language.meta.address;'
@@ -139,7 +161,22 @@ function convertCjsToEsm(code) {
   // Build the ESM output
   const imports = requires.map(r => `import ${r.varName} from '${r.modName}';`).join('\n');
   
-  return `${imports}\n${esm}\nexport default create;\nexport { name };\n`;
+  // Build export statements
+  const exportLines = [];
+  for (const exp of namedExports) {
+    if (exp.startsWith('default:')) {
+      exportLines.push(`export default ${exp.split(':')[1]};`);
+    } else {
+      const [, exportName, localName] = exp.split(':');
+      if (exportName === localName) {
+        exportLines.push(`export { ${exportName} };`);
+      } else {
+        exportLines.push(`export { ${localName} as ${exportName} };`);
+      }
+    }
+  }
+  
+  return `${imports}\n${esm}\n${exportLines.join('\n')}\n`;
 }
 
 function compileTsc(dir) {
