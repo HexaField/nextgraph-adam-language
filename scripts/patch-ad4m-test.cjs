@@ -211,12 +211,12 @@ async function pollGraphQLReady(port, maxAttempts = 60) {
   // Find the pattern where it spawns and sets up stdout listeners
   // Add a setTimeout to start polling after spawn
   const spawnPollInjection = `
-    // Patched: poll for GraphQL readiness instead of waiting for stdout message
+    // Patched: poll for GraphQL readiness then generate agent
     (async () => {
       try {
-        await pollGraphQLReady(typeof port !== 'undefined' ? port : 4000);
         const _port = typeof port !== 'undefined' ? port : 4000;
-        // Generate agent via raw GraphQL (avoids import issues)
+        await pollGraphQLReady(_port);
+        // Generate agent via raw GraphQL with auth token
         const http = require('http');
         await new Promise((resolve, reject) => {
           const body = JSON.stringify({
@@ -225,7 +225,11 @@ async function pollGraphQLReady(port, maxAttempts = 60) {
           const req = http.request({
             hostname: 'localhost', port: _port, path: '/graphql',
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(body),
+              'Authorization': global.ad4mToken || ''
+            }
           }, (res) => {
             let data = '';
             res.on('data', c => data += c);
