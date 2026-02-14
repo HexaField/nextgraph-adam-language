@@ -159,24 +159,33 @@ function addGraphQLPolling(filePath) {
   const pollingCode = `
 // === PATCHED_GRAPHQL_POLLING ===
 async function pollGraphQLReady(port, maxAttempts = 60) {
-  const fetch = (await import('node-fetch')).default;
+  const http = require('http');
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const res = await fetch(\`http://localhost:\${port}/graphql\`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: '{ agentStatus { isInitialized } }' }),
+      await new Promise((resolve, reject) => {
+        const req = http.request({
+          hostname: 'localhost',
+          port: port,
+          path: '/graphql',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }, (res) => {
+          res.resume();
+          if (res.statusCode >= 200 && res.statusCode < 500) resolve(true);
+          else reject(new Error('bad status: ' + res.statusCode));
+        });
+        req.on('error', reject);
+        req.write(JSON.stringify({ query: '{ agentStatus { isInitialized } }' }));
+        req.end();
       });
-      if (res.ok) {
-        logger.info('GraphQL server ready (polled)');
-        return true;
-      }
+      console.log('[INFO] GraphQL server ready (polled)');
+      return true;
     } catch (e) {
       // Not ready yet
     }
     await new Promise(r => setTimeout(r, 1000));
   }
-  throw new Error('GraphQL server did not become ready');
+  throw new Error('GraphQL server did not become ready after ' + maxAttempts + 's');
 }
 // === END PATCHED_GRAPHQL_POLLING ===
 `;
@@ -205,16 +214,32 @@ async function pollGraphQLReady(port, maxAttempts = 60) {
     // Patched: poll for GraphQL readiness instead of waiting for stdout message
     (async () => {
       try {
-        await pollGraphQLReady(port);
-        const ad4mClient = await buildAd4mClient(port);
-        try {
-          const generateAgentResponse = await ad4mClient.agent.generate('123456789');
-          logger.info('Agent generated: ' + generateAgentResponse.did);
-        } catch(e) {
-          logger.info('Agent generate failed (may already exist): ' + e.message);
-        }
+        await pollGraphQLReady(typeof port !== 'undefined' ? port : 4000);
+        const _port = typeof port !== 'undefined' ? port : 4000;
+        // Generate agent via raw GraphQL (avoids import issues)
+        const http = require('http');
+        await new Promise((resolve, reject) => {
+          const body = JSON.stringify({
+            query: 'mutation { agentGenerate(passphrase: "123456789") { did } }'
+          });
+          const req = http.request({
+            hostname: 'localhost', port: _port, path: '/graphql',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+          }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+              console.log('[INFO] Agent generate response: ' + data);
+              resolve(data);
+            });
+          });
+          req.on('error', reject);
+          req.write(body);
+          req.end();
+        });
       } catch(e) {
-        logger.error('GraphQL polling failed: ' + e);
+        console.error('[ERROR] GraphQL polling/agent-generate failed: ' + e);
       }
     })();
 `;
