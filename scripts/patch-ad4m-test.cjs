@@ -119,6 +119,21 @@ const cliPatches = [
   
   // Remove --overrideConfig (no longer exists)
   [' --overrideConfig', ''],
+  
+  // Guard storagePath copy — skip when empty (installSystemLanguages not yet run)
+  [
+    "fs.copySync(tempSeedFile.languageLanguageSettings.storagePath",
+    "if (tempSeedFile.languageLanguageSettings.storagePath) fs.copySync(tempSeedFile.languageLanguageSettings.storagePath"
+  ],
+  // Guard pathExistsSync for empty storagePath
+  [
+    "if (!fs.pathExistsSync(`${tempSeedFile.languageLanguageSettings.storagePath}-${relativePath}`))",
+    "if (tempSeedFile.languageLanguageSettings.storagePath && !fs.pathExistsSync(`${tempSeedFile.languageLanguageSettings.storagePath}-${relativePath}`))"
+  ],
+  [
+    "if (!fs.pathExistsSync(`${tempSeedFile.neighbourhoodLanguageSettings.storagePath}-${relativePath}`))",
+    "if (tempSeedFile.neighbourhoodLanguageSettings.storagePath && !fs.pathExistsSync(`${tempSeedFile.neighbourhoodLanguageSettings.storagePath}-${relativePath}`))"
+  ],
 ];
 
 // Context-aware patches (regex): --dataPath has different replacements
