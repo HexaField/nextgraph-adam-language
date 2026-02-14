@@ -39,7 +39,10 @@ jobs:
           restore-keys: ${{ runner.os }}-pnpm-
 
       - name: Fix SSH git deps in lockfile
-        run: sed -i 's|git+ssh://git@github.com|https://github.com|g' pnpm-lock.yaml
+        run: |
+          sed -i 's|git+ssh://git@github.com|https://github.com|g' pnpm-lock.yaml
+          sed -i 's|git+https://git@github.com:perspect3vism|https://github.com/perspect3vism|g' pnpm-lock.yaml
+          sed -i 's|repo: git@github.com:perspect3vism/appdata-path.git|repo: https://github.com/perspect3vism/appdata-path.git|g' pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -82,7 +85,10 @@ jobs:
           restore-keys: ${{ runner.os }}-pnpm-
 
       - name: Fix SSH git deps in lockfile
-        run: sed -i 's|git+ssh://git@github.com|https://github.com|g' pnpm-lock.yaml
+        run: |
+          sed -i 's|git+ssh://git@github.com|https://github.com|g' pnpm-lock.yaml
+          sed -i 's|git+https://git@github.com:perspect3vism|https://github.com/perspect3vism|g' pnpm-lock.yaml
+          sed -i 's|repo: git@github.com:perspect3vism/appdata-path.git|repo: https://github.com/perspect3vism/appdata-path.git|g' pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
