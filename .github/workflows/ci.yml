@@ -97,14 +97,32 @@ jobs:
             fi
           done
 
-      # 2. Download system language bundles (missing from package)
+      # 2. Download system language bundles + create bootstrapSeed.json
+      #    (both missing from published package)
       - name: Download ad4m-test system languages
         run: |
           for dir in $(find node_modules -path '*/@coasys/ad4m-test/scripts/get-builtin-test-langs.js' -exec dirname {} \;); do
             AD4M_DIR="$(dirname "$dir")"
-            echo "Downloading languages for: $AD4M_DIR"
-            cd "$AD4M_DIR" && node scripts/get-builtin-test-langs.js && cd -
-            ls -la "$AD4M_DIR/build/languages/" || true
+            echo "Setting up: $AD4M_DIR"
+            cd "$AD4M_DIR"
+            # Download language bundles
+            node scripts/get-builtin-test-langs.js
+            # Create bootstrapSeed.json (installSystemLanguages expects it)
+            cat > bootstrapSeed.json << 'SEED'
+          {
+            "trustedAgents": [],
+            "knownLinkLanguages": [],
+            "directMessageLanguage": "",
+            "agentLanguage": "",
+            "perspectiveLanguage": "",
+            "neighbourhoodLanguage": "",
+            "languageLanguageBundle": "",
+            "languageLanguageSettings": { "storagePath": "" },
+            "neighbourhoodLanguageSettings": { "storagePath": "" }
+          }
+          SEED
+            ls -la build/languages/ bootstrapSeed.json || true
+            cd -
           done
 
       # 3. Patch CLI flags: camelCase→kebab-case + remove --overrideConfig
