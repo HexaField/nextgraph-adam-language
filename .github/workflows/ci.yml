@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run unit tests
+        run: pnpm run test
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      # ad4m-test@0.11.1 ships TypeScript source but no compiled JS.
+      # Compile it in-place so the CLI and helpers are available.
+      - name: Build ad4m-test (missing from published package)
+        run: |
+          AD4M_TEST_DIR="node_modules/@coasys/ad4m-test"
+          if [ ! -f "$AD4M_TEST_DIR/build/cli.js" ]; then
+            echo "Building ad4m-test at: $AD4M_TEST_DIR"
+            cd "$AD4M_TEST_DIR"
+            npx tsc --noImplicitAny false
+            ls -la build/cli.js
+          else
+            echo "ad4m-test already built"
+          fi
+
+      # Pre-download the AD4M executor binary.
+      # ad4m-test's auto-download searches for "-linux-" but the asset
+      # uses "-linux_" (underscore), so auto-download fails.
+      - name: Download AD4M executor binary
+        run: |
+          mkdir -p ~/.ad4m-test/binary
+          curl -L -o ~/.ad4m-test/binary/ad4m \
+            'https://github.com/coasys/ad4m/releases/download/v0.11.1/ad4m-cli-executor-linux_0.11.1_amd64'
+          chmod +x ~/.ad4m-test/binary/ad4m
+          echo "Binary size: $(stat --format='%s' ~/.ad4m-test/binary/ad4m) bytes"
+          ~/.ad4m-test/binary/ad4m --version || echo "(version check failed, may still work)"
+
+      - name: Build language bundle
+        run: pnpm run build
+
+      - name: Run E2E tests
+        run: pnpm run test:e2e
+        timeout-minutes: 10
+
+      - name: Run multi-agent E2E tests
+        if: success()
+        run: pnpm run test:e2e:multi
+        timeout-minutes: 10
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ad4m-test-logs
+          path: ad4m-test.log
+          if-no-files-found: ignore
