@@ -61,21 +61,36 @@ function patchFile(filePath, patches) {
 
 function createBootstrapSeed(dir) {
   const seedPath = path.join(dir, 'bootstrapSeed.json');
-  if (!fs.existsSync(seedPath)) {
-    const seed = {
-      trustedAgents: [],
-      knownLinkLanguages: [],
-      directMessageLanguage: "",
-      agentLanguage: "",
-      perspectiveLanguage: "",
-      neighbourhoodLanguage: "",
-      languageLanguageBundle: "",
-      languageLanguageSettings: { storagePath: "" },
-      neighbourhoodLanguageSettings: { storagePath: "" }
-    };
-    fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2));
-    console.log(`  Created: ${seedPath}`);
+  // Always recreate to ensure languageLanguageBundle is populated
+  const seed = {
+    trustedAgents: [],
+    knownLinkLanguages: [],
+    directMessageLanguage: "",
+    agentLanguage: "",
+    perspectiveLanguage: "",
+    neighbourhoodLanguage: "",
+    languageLanguageBundle: "",
+    languageLanguageSettings: { storagePath: "" },
+    neighbourhoodLanguageSettings: { storagePath: "" }
+  };
+  
+  // Try to load the Language Language bundle
+  const langBundlePath = path.join(dir, 'build', 'languages', 'languages', 'build', 'bundle.js');
+  if (fs.existsSync(langBundlePath)) {
+    seed.languageLanguageBundle = fs.readFileSync(langBundlePath, 'utf-8');
+    console.log(`  Loaded Language Language bundle (${seed.languageLanguageBundle.length} chars)`);
   }
+  
+  // Set storage paths
+  const publishedLangs = path.join(dir, 'build', 'publishedLanguages');
+  const publishedNeighbourhoods = path.join(dir, 'build', 'publishedNeighbourhood');
+  fs.mkdirSync(publishedLangs, { recursive: true });
+  fs.mkdirSync(publishedNeighbourhoods, { recursive: true });
+  seed.languageLanguageSettings.storagePath = publishedLangs;
+  seed.neighbourhoodLanguageSettings.storagePath = publishedNeighbourhoods;
+  
+  fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2));
+  console.log(`  Created: ${seedPath}`);
 }
 
 function downloadLanguages(dir) {
@@ -370,11 +385,11 @@ if (dirs.length === 0) {
 for (const dir of dirs) {
   console.log(`\nProcessing: ${dir}`);
   
-  // Step 1: Create bootstrapSeed.json
-  createBootstrapSeed(dir);
-  
-  // Step 2: Download language bundles
+  // Step 1: Download language bundles (needed for bootstrapSeed)
   downloadLanguages(dir);
+  
+  // Step 2: Create bootstrapSeed.json (includes Language Language bundle)
+  createBootstrapSeed(dir);
   
   // Step 3: Compile TypeScript
   compileTsc(dir);
