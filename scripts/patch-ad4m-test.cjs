@@ -81,9 +81,9 @@ function createBootstrapSeed(dir) {
     console.log(`  Loaded Language Language bundle (${seed.languageLanguageBundle.length} chars)`);
   }
   
-  // Set storage paths
-  const publishedLangs = path.join(dir, 'build', 'publishedLanguages');
-  const publishedNeighbourhoods = path.join(dir, 'build', 'publishedNeighbourhood');
+  // Set storage paths (must be absolute for the executor)
+  const publishedLangs = path.resolve(dir, 'build', 'publishedLanguages');
+  const publishedNeighbourhoods = path.resolve(dir, 'build', 'publishedNeighbourhood');
   fs.mkdirSync(publishedLangs, { recursive: true });
   fs.mkdirSync(publishedNeighbourhoods, { recursive: true });
   seed.languageLanguageSettings.storagePath = publishedLangs;
