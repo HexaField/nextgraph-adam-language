@@ -90,11 +90,14 @@ jobs:
       # ad4m-test's auto-download has wrong URL pattern ("-linux-" vs "-linux_")
       - name: Download AD4M executor binary
         run: |
-          mkdir -p ~/.ad4m-test/binary
-          curl -sL -o ~/.ad4m-test/binary/ad4m \
-            'https://github.com/coasys/ad4m/releases/download/v0.11.1/ad4m-cli-executor-linux_0.11.1_amd64'
-          chmod +x ~/.ad4m-test/binary/ad4m
-          echo "Binary: $(~/.ad4m-test/binary/ad4m --version 2>&1 || true) ($(stat --format='%s' ~/.ad4m-test/binary/ad4m) bytes)"
+          # Place binary where both installSystemLanguages (~/.ad4m) and startServer (~/.ad4m-test) expect it
+          for dir in ~/.ad4m/binary ~/.ad4m-test/binary; do
+            mkdir -p "$dir"
+            curl -sL -o "$dir/ad4m" \
+              'https://github.com/coasys/ad4m/releases/download/v0.11.1/ad4m-cli-executor-linux_0.11.1_amd64'
+            chmod +x "$dir/ad4m"
+          done
+          echo "Binary: $(~/.ad4m/binary/ad4m --version 2>&1 || true)"
 
       # Run installSystemLanguages to populate bootstrapSeed.json with system language hashes
       # This is a prerequisite for the test harness
