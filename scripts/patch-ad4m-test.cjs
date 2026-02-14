@@ -83,8 +83,16 @@ function createBootstrapSeed(dir) {
   console.log(`  Created: ${seedPath}`);
 }
 
+// Node built-in modules that need 'node:' prefix in Deno
+const NODE_BUILTINS = new Set([
+  'assert', 'buffer', 'child_process', 'cluster', 'console', 'constants',
+  'crypto', 'dgram', 'dns', 'domain', 'events', 'fs', 'http', 'https',
+  'module', 'net', 'os', 'path', 'perf_hooks', 'process', 'punycode',
+  'querystring', 'readline', 'repl', 'stream', 'string_decoder', 'sys',
+  'timers', 'tls', 'tty', 'url', 'util', 'v8', 'vm', 'worker_threads', 'zlib'
+]);
+
 function convertCjsToEsm(code) {
-  // Replace CJS patterns with ESM equivalents
   let esm = code;
   
   // Remove 'use strict' (ESM is strict by default)
@@ -93,13 +101,13 @@ function convertCjsToEsm(code) {
   // Remove Object.defineProperty(exports, '__esModule', ...)
   esm = esm.replace(/Object\.defineProperty\(exports,\s*'__esModule'.*?\);\s*/g, '');
   
-  // Replace require() calls with imports (collect them first)
-  // var path = require('path'); → import path from 'path';
-  // var fs = require('fs'); → import fs from 'fs';
+  // Replace require() calls with imports
   const requires = [];
   esm = esm.replace(/var\s+(\w+)\s*=\s*require\('([^']+)'\);?/g, (match, varName, modName) => {
-    requires.push({ varName, modName });
-    return ''; // Remove, we'll add imports at top
+    // Deno requires 'node:' prefix for Node built-ins
+    const resolvedMod = NODE_BUILTINS.has(modName) ? `node:${modName}` : modName;
+    requires.push({ varName, modName: resolvedMod });
+    return '';
   });
   
   // Replace exports["default"] = ... and exports.name = ... at the end
