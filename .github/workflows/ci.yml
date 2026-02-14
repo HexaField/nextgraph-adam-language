@@ -95,6 +95,26 @@ jobs:
             echo "ad4m-test already built"
           fi
 
+      # ad4m-test@0.11.1 uses camelCase CLI flags (--dataPath) but the
+      # AD4M v0.11.1 binary switched to kebab-case (--data-path).
+      # Patch the compiled JS to match the binary's expected flags.
+      - name: Patch ad4m-test CLI flags (camelCase → kebab-case)
+        run: |
+          AD4M_TEST_DIR="node_modules/@coasys/ad4m-test"
+          for f in "$AD4M_TEST_DIR/build/cli.js" "$AD4M_TEST_DIR/build/installSystemLanguages.js"; do
+            if [ -f "$f" ]; then
+              sed -i \
+                -e 's/--dataPath/--data-path/g' \
+                -e 's/--reqCredential/--req-credential/g' \
+                -e 's/--ipfsPort/--ipfs-port/g' \
+                -e 's/--languageLanguageOnly/--language-language-only/g' \
+                -e 's/--networkBootstrapSeed/--network-bootstrap-seed/g' \
+                -e 's/--overrideConfig/--override-config/g' \
+                "$f"
+              echo "Patched: $f"
+            fi
+          done
+
       # Pre-download the AD4M executor binary.
       # ad4m-test's auto-download searches for "-linux-" but the asset
       # uses "-linux_" (underscore), so auto-download fails.
