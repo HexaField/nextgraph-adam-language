@@ -86,18 +86,6 @@ jobs:
       - name: Patch ad4m-test
         run: node scripts/patch-ad4m-test.cjs
 
-      - name: Debug - check converted bundle
-        run: |
-          BUNDLE=$(find node_modules -path "*/ad4m-test/build/languages/languages/build/bundle.js" | head -1)
-          echo "Bundle: $BUNDLE"
-          echo "Lines: $(wc -l < $BUNDLE)"
-          echo "Export defaults: $(grep -c 'export default' $BUNDLE)"
-          echo "--- Last 10 lines ---"
-          tail -10 "$BUNDLE"
-          echo "--- bootstrapSeed bundle length ---"
-          SEED=$(find node_modules -path "*/ad4m-test/bootstrapSeed.json" | head -1)
-          node -e "const s=require('$SEED'); const b=s.languageLanguageBundle; console.log('length:', b.length); console.log('export defaults:', (b.match(/export default/g)||[]).length); const lines=b.split('\n'); console.log('last 5:'); lines.slice(-7).forEach((l,i)=>console.log(lines.length-6+i,l));"
-
       # Pre-download the AD4M executor binary
       # ad4m-test's auto-download has wrong URL pattern ("-linux-" vs "-linux_")
       - name: Download AD4M executor binary

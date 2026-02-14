@@ -12,20 +12,24 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 function findAd4mTestDirs() {
-  const dirs = [];
+  const dirs = new Set();
   const base = path.join(process.cwd(), 'node_modules');
+  
+  // Check direct
   const direct = path.join(base, '@coasys', 'ad4m-test');
-  if (fs.existsSync(direct)) dirs.push(direct);
+  if (fs.existsSync(direct)) dirs.add(fs.realpathSync(direct));
+  
+  // Check pnpm hoisted
   const pnpmDir = path.join(base, '.pnpm');
   if (fs.existsSync(pnpmDir)) {
     for (const entry of fs.readdirSync(pnpmDir)) {
       if (entry.startsWith('@coasys+ad4m-test')) {
         const nested = path.join(pnpmDir, entry, 'node_modules', '@coasys', 'ad4m-test');
-        if (fs.existsSync(nested)) dirs.push(nested);
+        if (fs.existsSync(nested)) dirs.add(fs.realpathSync(nested));
       }
     }
   }
-  return dirs;
+  return [...dirs];
 }
 
 function downloadLanguages(dir) {
