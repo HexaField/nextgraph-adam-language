@@ -117,6 +117,25 @@ function convertCjsToEsm(code) {
   // Remove sourceMappingURL
   esm = esm.replace(/\/\/# sourceMappingURL=.*$/m, '');
   
+  // Patch out IPFS usage — executor removed IPFS support but Language Language
+  // bundle still calls context.IPFS.add() for hashing. Replace with direct use
+  // of language.meta.address (already computed by executor via UTILS.hash()).
+  // Use simple string replacements instead of complex regex
+  const ipfsLines = [
+    'const ipfsAddress = await __classPrivateFieldGet$1(this, _PutAdapter_IPFS, "f").add({ content: language.bundle.toString() }, { onlyHash: true });',
+    '// @ts-ignore',
+    'const hash = ipfsAddress.cid.toString();',
+    'if (hash != language.meta.address)',
+  ];
+  for (const line of ipfsLines) {
+    esm = esm.split(line).join('');
+  }
+  // Replace the throw with just: const hash = language.meta.address;
+  esm = esm.replace(
+    /throw new Error\(`Language Persistence: Can't store language[^`]*`\);/,
+    'const hash = language.meta.address;'
+  );
+  
   // Build the ESM output
   const imports = requires.map(r => `import ${r.varName} from '${r.modName}';`).join('\n');
   
