@@ -197,6 +197,9 @@ const cliPatches = [
   ["'--port'", "'--gql-port'"],
   ['--networkBootstrapSeed', '--network-bootstrap-seed'],
   ['--languageLanguageOnly', '--language-language-only'],
+  // Force language-language-only to true — skip loading system languages
+  // (their CJS bundles crash Deno; we only need Language Language for e2e)
+  ["'--language-language-only', 'false'", "'--language-language-only', 'true'"],
   // Remove --ipfsPort (no longer exists)
   [", '--ipfsPort', ipfsPort.toString()", ''],
   // Remove --overrideConfig
