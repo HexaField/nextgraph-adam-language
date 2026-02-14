@@ -257,6 +257,41 @@ async function pollGraphQLReady(port, maxAttempts = 60) {
           req.write(body);
           req.end();
         });
+        // Fallback: if "AD4M init complete" isn't detected within 10s, emit it synthetically
+        // The Rust executor logs it to stderr but buffering may cause it to be missed
+        // Poll agentStatus to confirm initialization
+        const pollInitComplete = async () => {
+          const http = require('http');
+          for (let i = 0; i < 120; i++) {
+            try {
+              const result = await new Promise((resolve, reject) => {
+                const body = JSON.stringify({ query: '{ agentStatus { isInitialized isUnlocked did } }' });
+                const req = http.request({
+                  hostname: 'localhost', port: _port, path: '/graphql',
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(body),
+                    'Authorization': global.ad4mToken || ''
+                  }
+                }, (res) => {
+                  let d = ''; res.on('data', c => d += c);
+                  res.on('end', () => resolve(JSON.parse(d)));
+                });
+                req.on('error', reject);
+                req.write(body); req.end();
+              });
+              if (result && result.data && result.data.agentStatus && result.data.agentStatus.isInitialized) {
+                console.log('[INFO] Agent initialized (polled). Emitting AD4M init complete.');
+                child.stdout.emit('data', Buffer.from('AD4M init complete'));
+                return;
+              }
+            } catch(e) { /* not ready */ }
+            await new Promise(r => setTimeout(r, 1000));
+          }
+          console.error('[ERROR] Agent never initialized after 120s');
+        };
+        pollInitComplete();
       } catch(e) {
         console.error('[ERROR] GraphQL polling/agent-generate failed: ' + e);
       }
