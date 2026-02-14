@@ -81,71 +81,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # ──────────────────────────────────────────────────────────
-      # Fix @coasys/ad4m-test@0.11.1 — the published package is
-      # broken in multiple ways. The following steps patch it.
-      # ──────────────────────────────────────────────────────────
+      # Patch @coasys/ad4m-test@0.11.1 for v0.11.1 binary compatibility
+      # The published package is broken in multiple ways — see scripts/patch-ad4m-test.js
+      - name: Patch ad4m-test
+        run: node scripts/patch-ad4m-test.cjs
 
-      # 1. Compile TypeScript (package ships source, no build/)
-      - name: Build ad4m-test
-        run: |
-          # Find all ad4m-test locations (pnpm hoists to .pnpm/)
-          for dir in $(find node_modules -path '*/@coasys/ad4m-test/tsconfig.json' -exec dirname {} \;); do
-            if [ ! -f "$dir/build/cli.js" ]; then
-              echo "Building ad4m-test at: $dir"
-              cd "$dir" && npx tsc --noImplicitAny false && cd -
-            fi
-          done
-
-      # 2. Download system language bundles + create bootstrapSeed.json
-      #    (both missing from published package)
-      - name: Download ad4m-test system languages
-        run: |
-          for dir in $(find node_modules -path '*/@coasys/ad4m-test/scripts/get-builtin-test-langs.js' -exec dirname {} \;); do
-            AD4M_DIR="$(dirname "$dir")"
-            echo "Setting up: $AD4M_DIR"
-            cd "$AD4M_DIR"
-            # Download language bundles
-            node scripts/get-builtin-test-langs.js
-            # Create bootstrapSeed.json (installSystemLanguages expects it)
-            cat > bootstrapSeed.json << 'SEED'
-          {
-            "trustedAgents": [],
-            "knownLinkLanguages": [],
-            "directMessageLanguage": "",
-            "agentLanguage": "",
-            "perspectiveLanguage": "",
-            "neighbourhoodLanguage": "",
-            "languageLanguageBundle": "",
-            "languageLanguageSettings": { "storagePath": "" },
-            "neighbourhoodLanguageSettings": { "storagePath": "" }
-          }
-          SEED
-            ls -la build/languages/ bootstrapSeed.json || true
-            cd -
-          done
-
-      # 3. Patch CLI flags: camelCase→kebab-case + remove --overrideConfig
-      - name: Patch ad4m-test CLI flags
-        run: |
-          for dir in $(find node_modules -path '*/@coasys/ad4m-test/build/cli.js' -exec dirname {} \;); do
-            for f in "$dir"/*.js; do
-              [ ! -f "$f" ] && continue
-              sed -i \
-                -e 's/--dataPath/--data-path/g' \
-                -e 's/--reqCredential/--req-credential/g' \
-                -e 's/--ipfsPort/--ipfs-port/g' \
-                -e 's/--languageLanguageOnly/--language-language-only/g' \
-                -e 's/--networkBootstrapSeed/--network-bootstrap-seed/g' \
-                -e 's/ --overrideConfig//g' \
-                -e 's/ --override-config//g' \
-                "$f"
-              echo "Patched: $f"
-            done
-          done
-
-      # 4. Pre-download AD4M executor binary (auto-download has
-      #    wrong URL pattern: searches "-linux-" but asset uses "-linux_")
+      # Pre-download the AD4M executor binary
+      # ad4m-test's auto-download has wrong URL pattern ("-linux-" vs "-linux_")
       - name: Download AD4M executor binary
         run: |
           mkdir -p ~/.ad4m-test/binary
@@ -153,8 +95,6 @@ jobs:
             'https://github.com/coasys/ad4m/releases/download/v0.11.1/ad4m-cli-executor-linux_0.11.1_amd64'
           chmod +x ~/.ad4m-test/binary/ad4m
           echo "Binary: $(~/.ad4m-test/binary/ad4m --version 2>&1 || true) ($(stat --format='%s' ~/.ad4m-test/binary/ad4m) bytes)"
-
-      # ──────────────────────────────────────────────────────────
 
       - name: Build language bundle
         run: pnpm run build
