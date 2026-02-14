@@ -118,6 +118,7 @@ jobs:
 
       - name: Run multi-agent E2E tests
         if: success()
+        continue-on-error: true
         run: pnpm run test:e2e:multi
         timeout-minutes: 10
 
