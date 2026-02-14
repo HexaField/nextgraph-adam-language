@@ -107,7 +107,7 @@ const cliPatches = [
   ["'serve'", "'run'"],
   
   // Flag renames (camelCase → kebab-case, and new names)
-  ['--dataPath', '--app-data-path'],
+  // Note: --dataPath handled separately (init uses --data-path, run uses --app-data-path)
   ['--reqCredential', '--admin-credential'],
   ["'--port'", "'--gql-port'"],
   ['--networkBootstrapSeed', '--network-bootstrap-seed'],
@@ -119,6 +119,15 @@ const cliPatches = [
   
   // Remove --overrideConfig (no longer exists)
   [' --overrideConfig', ''],
+];
+
+// Context-aware patches (regex): --dataPath has different replacements
+// depending on whether it's in an init or run/serve context
+const contextAwarePatches = [
+  // In execSync strings: "init --dataPath" → "init --data-path"
+  [/init --dataPath/g, 'init --data-path'],
+  // In spawn arrays: '--dataPath' (used after serve/run) → '--app-data-path'
+  [/'--dataPath'/g, "'--app-data-path'"],
 ];
 
 // Startup detection patch: replace waiting for stdout message
@@ -255,7 +264,7 @@ for (const dir of dirs) {
   if (fs.existsSync(buildDir)) {
     for (const file of fs.readdirSync(buildDir)) {
       if (file.endsWith('.js')) {
-        patchFile(path.join(buildDir, file), [...cliPatches, ...startupDetectionPatch]);
+        patchFile(path.join(buildDir, file), [...cliPatches, ...contextAwarePatches, ...startupDetectionPatch]);
       }
     }
   }
