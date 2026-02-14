@@ -24,6 +24,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Get pnpm store directory
         shell: bash
@@ -62,6 +64,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Get pnpm store directory
         shell: bash
