@@ -113,6 +113,9 @@ const cliPatches = [
   ['--networkBootstrapSeed', '--network-bootstrap-seed'],
   ['--languageLanguageOnly', '--language-language-only'],
   
+  // Force language-language-only to true (we don't run installSystemLanguages)
+  ["'--language-language-only', 'false'", "'--language-language-only', 'true'"],
+  
   // Remove --ipfsPort (no longer exists)
   [", '--ipfsPort', ipfsPort.toString()", ''],
   [", '--ipfsPort', ipfsPort.toString(),", ','],
