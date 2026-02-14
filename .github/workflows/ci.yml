@@ -38,6 +38,9 @@ jobs:
           key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-
 
+      - name: Fix SSH git deps in lockfile
+        run: sed -i 's|git+ssh://git@github.com|https://github.com|g' pnpm-lock.yaml
+
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
@@ -77,6 +80,9 @@ jobs:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Fix SSH git deps in lockfile
+        run: sed -i 's|git+ssh://git@github.com|https://github.com|g' pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
