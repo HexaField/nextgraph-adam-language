@@ -97,22 +97,30 @@ jobs:
 
       # ad4m-test@0.11.1 uses camelCase CLI flags (--dataPath) but the
       # AD4M v0.11.1 binary switched to kebab-case (--data-path).
-      # Patch the compiled JS to match the binary's expected flags.
-      - name: Patch ad4m-test CLI flags (camelCase → kebab-case)
+      # Also --overrideConfig was removed entirely from the binary.
+      # Patch all compiled JS files to match the binary's expected flags.
+      - name: Patch ad4m-test CLI flags for binary compatibility
         run: |
           AD4M_TEST_DIR="node_modules/@coasys/ad4m-test"
-          for f in "$AD4M_TEST_DIR/build/cli.js" "$AD4M_TEST_DIR/build/installSystemLanguages.js"; do
-            if [ -f "$f" ]; then
+          # Also check the pnpm hoisted location
+          PNPM_DIR=$(find node_modules -path '*/@coasys/ad4m-test/build/cli.js' -exec dirname {} \; 2>/dev/null | head -1)
+          
+          for dir in "$AD4M_TEST_DIR/build" "$PNPM_DIR"; do
+            [ -z "$dir" ] && continue
+            [ ! -d "$dir" ] && continue
+            for f in "$dir"/*.js; do
+              [ ! -f "$f" ] && continue
               sed -i \
                 -e 's/--dataPath/--data-path/g' \
                 -e 's/--reqCredential/--req-credential/g' \
                 -e 's/--ipfsPort/--ipfs-port/g' \
                 -e 's/--languageLanguageOnly/--language-language-only/g' \
                 -e 's/--networkBootstrapSeed/--network-bootstrap-seed/g' \
-                -e 's/--overrideConfig/--override-config/g' \
+                -e 's/ --overrideConfig//g' \
+                -e 's/ --override-config//g' \
                 "$f"
               echo "Patched: $f"
-            fi
+            done
           done
 
       # Pre-download the AD4M executor binary.
