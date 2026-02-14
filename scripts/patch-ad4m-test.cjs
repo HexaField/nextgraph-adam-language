@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 /**
- * Patch @coasys/ad4m-test for compatibility
+ * Patch @coasys/ad4m-test for compatibility with AD4M v0.10.1+
  * 
  * The npm package ships TypeScript source only (no build/).
- * This script:
- * 1. Downloads system language bundles
- * 2. Creates bootstrapSeed.json with Language Language bundle
- * 3. Compiles TypeScript to JS
- * 4. Patches SSH git dependency to HTTPS
+ * Both v0.10.1 and v0.11.1 renamed CLI flags from camelCase to kebab-case.
+ * This script handles all the fixes.
  */
 
 const fs = require('fs');
@@ -17,12 +14,8 @@ const { execSync } = require('child_process');
 function findAd4mTestDirs() {
   const dirs = [];
   const base = path.join(process.cwd(), 'node_modules');
-  
-  // Check direct
   const direct = path.join(base, '@coasys', 'ad4m-test');
   if (fs.existsSync(direct)) dirs.push(direct);
-  
-  // Check pnpm hoisted
   const pnpmDir = path.join(base, '.pnpm');
   if (fs.existsSync(pnpmDir)) {
     for (const entry of fs.readdirSync(pnpmDir)) {
@@ -64,14 +57,12 @@ function createBootstrapSeed(dir) {
     neighbourhoodLanguageSettings: { storagePath: "" }
   };
   
-  // Load Language Language bundle
   const langBundlePath = path.join(dir, 'build', 'languages', 'languages', 'build', 'bundle.js');
   if (fs.existsSync(langBundlePath)) {
     seed.languageLanguageBundle = fs.readFileSync(langBundlePath, 'utf-8');
     console.log(`  Loaded Language Language bundle (${seed.languageLanguageBundle.length} chars)`);
   }
   
-  // Set storage paths (absolute)
   const publishedLangs = path.resolve(dir, 'build', 'publishedLanguages');
   const publishedNeighbourhoods = path.resolve(dir, 'build', 'publishedNeighbourhood');
   fs.mkdirSync(publishedLangs, { recursive: true });
@@ -91,17 +82,65 @@ function compileTsc(dir) {
   }
 }
 
-function patchLockfile() {
-  // Fix SSH git dep in pnpm lockfile
-  const lockPath = path.join(process.cwd(), 'pnpm-lock.yaml');
-  if (fs.existsSync(lockPath)) {
-    let content = fs.readFileSync(lockPath, 'utf-8');
-    if (content.includes('git@github.com:')) {
-      content = content.replace(/git@github\.com:/g, 'https://github.com/');
-      fs.writeFileSync(lockPath, content);
-      console.log('  Fixed SSH URLs in pnpm-lock.yaml');
+// CLI flag patches: test-runner uses old camelCase flags
+// Both v0.10.1 and v0.11.1 use kebab-case
+const cliPatches = [
+  // Subcommand rename
+  ["'serve'", "'run'"],
+  // Flag renames
+  ['--reqCredential', '--admin-credential'],
+  ["'--port'", "'--gql-port'"],
+  ['--networkBootstrapSeed', '--network-bootstrap-seed'],
+  ['--languageLanguageOnly', '--language-language-only'],
+  // Remove --ipfsPort (no longer exists)
+  [", '--ipfsPort', ipfsPort.toString()", ''],
+  // Remove --overrideConfig
+  [' --overrideConfig', ''],
+  // Guard storagePath copy for empty paths
+  [
+    "fs.copySync(tempSeedFile.languageLanguageSettings.storagePath",
+    "if (tempSeedFile.languageLanguageSettings.storagePath) fs.copySync(tempSeedFile.languageLanguageSettings.storagePath"
+  ],
+  [
+    "if (!fs.pathExistsSync(`${tempSeedFile.languageLanguageSettings.storagePath}-${relativePath}`))",
+    "if (tempSeedFile.languageLanguageSettings.storagePath && !fs.pathExistsSync(`${tempSeedFile.languageLanguageSettings.storagePath}-${relativePath}`))"
+  ],
+  [
+    "if (!fs.pathExistsSync(`${tempSeedFile.neighbourhoodLanguageSettings.storagePath}-${relativePath}`))",
+    "if (tempSeedFile.neighbourhoodLanguageSettings.storagePath && !fs.pathExistsSync(`${tempSeedFile.neighbourhoodLanguageSettings.storagePath}-${relativePath}`))"
+  ],
+];
+
+// Context-aware: --dataPath needs different replacement in init vs run contexts
+const contextAwarePatches = [
+  [/init --dataPath/g, 'init --data-path'],
+  [/'--dataPath'/g, "'--app-data-path'"],
+];
+
+function patchFile(filePath, patches) {
+  if (!fs.existsSync(filePath)) return false;
+  let content = fs.readFileSync(filePath, 'utf-8');
+  let changed = false;
+  
+  for (const [search, replace] of patches) {
+    if (typeof search === 'string') {
+      if (content.includes(search)) {
+        content = content.split(search).join(replace);
+        changed = true;
+      }
+    } else {
+      if (search.test(content)) {
+        content = content.replace(search, replace);
+        changed = true;
+      }
     }
   }
+  
+  if (changed) {
+    fs.writeFileSync(filePath, content);
+    console.log(`  Patched: ${filePath}`);
+  }
+  return changed;
 }
 
 // Main
@@ -115,9 +154,25 @@ if (dirs.length === 0) {
 
 for (const dir of dirs) {
   console.log(`\nProcessing: ${dir}`);
+  
+  // Step 1: Download language bundles
   downloadLanguages(dir);
+  
+  // Step 2: Create bootstrapSeed with Language Language bundle
   createBootstrapSeed(dir);
+  
+  // Step 3: Compile TypeScript
   compileTsc(dir);
+  
+  // Step 4: Patch CLI flags in compiled JS
+  const buildDir = path.join(dir, 'build');
+  if (fs.existsSync(buildDir)) {
+    for (const file of fs.readdirSync(buildDir)) {
+      if (file.endsWith('.js')) {
+        patchFile(path.join(buildDir, file), [...cliPatches, ...contextAwarePatches]);
+      }
+    }
+  }
 }
 
 console.log('\nDone!');
