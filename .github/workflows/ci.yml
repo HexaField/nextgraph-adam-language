@@ -91,8 +91,9 @@ jobs:
       - name: Download AD4M executor binary
         run: |
           mkdir -p ~/.ad4m-test/binary
+          # Use v0.10.1 (stable) — v0.11.1 Deno executor crashes on CJS language bundles
           curl -sL -o ~/.ad4m-test/binary/ad4m \
-            'https://github.com/coasys/ad4m/releases/download/v0.11.1/ad4m-cli-executor-linux_0.11.1_amd64'
+            'https://github.com/coasys/ad4m/releases/download/v0.10.1/ad4m-cli-executor-linux-0.10.1-x64'
           chmod +x ~/.ad4m-test/binary/ad4m
           echo "Binary downloaded: $(~/.ad4m-test/binary/ad4m --version 2>&1 || true)"
 
