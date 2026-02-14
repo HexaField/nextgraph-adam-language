@@ -63,7 +63,12 @@ export default {
     resolve({
       preferBuiltins: false,
     }),
-    commonjs(),
+    commonjs({
+      dynamicRequireTargets: [
+        'node_modules/@ng-org/nextgraph/snippets/lib-wasm-*/jsland/node.js',
+      ],
+      dynamicRequireRoot: '.',
+    }),
     typescript({ tsconfig: './tsconfig.json' }),
     // Replace readFileSync WASM loading with inline base64 decode
     wasmBase64 ? {
