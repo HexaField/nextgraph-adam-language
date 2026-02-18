@@ -42,11 +42,10 @@ cd "$TEST_RUNNER_DIR"
 # Replace workspace wildcard with the published version
 sed -i 's/"@coasys\/ad4m": "\*"/"@coasys\/ad4m": "^0.11.1"/' package.json
 
-# Remove any pnpm workspace files that would interfere with npm install
-rm -f "$CLONE_DIR/pnpm-workspace.yaml" "$CLONE_DIR/pnpm-lock.yaml" "$CLONE_DIR/.npmrc"
-
-# Also replace any link: references that pnpm workspace might have injected
-sed -i 's/"link:[^"]*"/"^0.11.1"/g' package.json
+# Remove any pnpm/npm files at the repo root that interfere with npm install
+# (npm walks up the directory tree and finds the monorepo root package.json)
+rm -f "$CLONE_DIR/pnpm-workspace.yaml" "$CLONE_DIR/pnpm-lock.yaml" \
+      "$CLONE_DIR/.npmrc" "$CLONE_DIR/package.json"
 
 # Use npm (not pnpm) to avoid workspace resolution issues
 npm install --ignore-scripts 2>&1 | tail -5
