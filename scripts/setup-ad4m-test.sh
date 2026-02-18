@@ -50,6 +50,9 @@ rm -f "$CLONE_DIR/pnpm-workspace.yaml" "$CLONE_DIR/pnpm-lock.yaml" \
 # Use npm (not pnpm) to avoid workspace resolution issues
 npm install --ignore-scripts 2>&1 | tail -5
 
+# Install missing deps not listed in package.json (hoisted from monorepo root)
+npm install get-port --ignore-scripts 2>&1 | tail -3
+
 # Step 3: Build
 echo ""
 echo "Step 3: Build TypeScript..."
