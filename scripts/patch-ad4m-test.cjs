@@ -22,7 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const FIX_BRANCH = 'fix/ad4m-test-runner';
+const FIX_BRANCH = 'fix/ad4m-test-use-bootstrap-seed';
 const AD4M_REPO = 'https://github.com/coasys/ad4m.git';
 
 function findAd4mTestDirs() {
