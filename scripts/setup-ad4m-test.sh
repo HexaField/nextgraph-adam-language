@@ -16,6 +16,7 @@
 
 set -euo pipefail
 
+PROJECT_DIR="$(pwd)"
 AD4M_BRANCH="${AD4M_BRANCH:-fix/ad4m-test-use-bootstrap-seed}"
 AD4M_REPO="https://github.com/coasys/ad4m.git"
 CLONE_DIR="/tmp/ad4m-source"
@@ -83,7 +84,7 @@ echo "Bootstrap seed ready at $SEED_DST"
 # Step 5: Link into consumer project
 echo ""
 echo "Step 5: Symlink into node_modules..."
-cd "$OLDPWD"
+cd "$PROJECT_DIR"
 
 # Find the ad4m-test location(s) in node_modules
 LINKED=0
