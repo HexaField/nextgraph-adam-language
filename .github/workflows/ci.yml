@@ -93,10 +93,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # Replace ad4m-test with fixed source from coasys/ad4m fix branch,
-      # then build and prepare system language bundles for Deno runtime
-      - name: Build ad4m-test from fix branch
-        run: node scripts/patch-ad4m-test.cjs
+      # Build @coasys/ad4m-test from source (the npm package is broken).
+      # When a fixed version is published, replace this with a normal dependency.
+      - name: Build ad4m-test from source
+        run: bash scripts/setup-ad4m-test.sh
 
       # Pre-download the AD4M executor binary
       - name: Download AD4M executor binary
