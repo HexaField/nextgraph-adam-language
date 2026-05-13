@@ -1,3 +1,6 @@
+# MIGRATED TO [NextGraph Link Language](https://github.com/HexaField/nextgraph-link-language)
+
+
 # NextGraph AD4M Language
 
 This is an **AD4M Language** implementation that bridges [AD4M](https://ad4m.dev/) with [NextGraph](https://nextgraph.org/). It allows AD4M agents to use NextGraph as a decentralized, privacy-focused storage and synchronization backend for Perspectives, Expressions, and Links.
